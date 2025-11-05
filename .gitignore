@@ -1,7 +1,7 @@
 venv/
 __pycache__/
 outputs/
-.idea/
-.DS_Store
-*.mp4
-*.zip
+*.safetensors
+*.bin
+.cache/
+hf_cache/
