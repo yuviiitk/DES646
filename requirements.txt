@@ -1,6 +1,7 @@
+streamlit==1.51.0
 torch
 diffusers
 transformers
-accelerate
-streamlit
-pillow
+huggingface-hub
+Pillow
+fpdf
