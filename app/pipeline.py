@@ -1,75 +1,150 @@
-from diffusers import StableDiffusionPipeline
-import torch, os
+## app/pipeline.py
+
+import os
+import contextlib
+from functools import lru_cache
+from typing import List, Optional
+
+import torch
 from PIL import Image, ImageEnhance
+from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
 
-def load_model():
-    """Load a lightweight, colorful Stable Diffusion model for Codespaces."""
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.float16 if device == "cuda" else torch.float32
-    print(f"✅ Using device: {device}")
+from consistency import install_csa, uninstall_csa, build_lpa_latents
 
-    models = ["stabilityai/sd-turbo", "runwayml/stable-diffusion-v1-5"]
-    for model_name in models:
+
+@lru_cache(maxsize=1)
+def _get_device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+@lru_cache(maxsize=1)
+def get_pipeline() -> StableDiffusionPipeline:
+    """Load a diffusion pipeline once and cache it. Prefers SD‑Turbo, then SD‑1.5."""
+    device = _get_device()
+    dtype = torch.float16 if device.type == "cuda" else torch.float32
+
+    candidates = [
+        "stabilityai/sd-turbo",
+        "runwayml/stable-diffusion-v1-5",
+    ]
+
+    last_err = None
+    for name in candidates:
         try:
-            print(f"⏳ Loading model: {model_name}")
-            pipe = StableDiffusionPipeline.from_pretrained(
-                model_name,
-                torch_dtype=dtype,
-                safety_checker=None
-            )
-            pipe.to(device)
-            pipe.enable_attention_slicing()
-            pipe.enable_vae_slicing()
-            print(f"🎨 Successfully loaded model: {model_name}")
+            print(f"⏳ Loading model: {name} on {device} ({dtype})")
+            pipe = StableDiffusionPipeline.from_pretrained(name, torch_dtype=dtype, safety_checker=None)
+            # Fast scheduler
+            pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+
+            if device.type == "cuda":
+                try:
+                    pipe.enable_model_cpu_offload()
+                except Exception:
+                    pipe.to(device)
+                try:
+                    pipe.unet = torch.compile(pipe.unet)  # PyTorch 2.x
+                except Exception:
+                    pass
+                pipe.enable_attention_slicing()
+                pipe.enable_vae_slicing()
+            else:
+                pipe.to(device)
+
+            print("🎨 Model ready")
             return pipe
         except Exception as e:
-            print(f"⚠️ Failed to load {model_name}: {e}")
-    raise RuntimeError("❌ Could not load any model from Hugging Face.")
-
-# Load once globally
-pipe = load_model()
+            print(f"⚠️ Failed to load {name}: {e}")
+            last_err = e
+    raise RuntimeError(f"Could not load any model. Last error: {last_err}")
 
 
-def enhance_color(path, factor=1.5):
-    """Boost image saturation after generation."""
-    image = Image.open(path)
-    enhancer = ImageEnhance.Color(image)
-    colorful_image = enhancer.enhance(factor)
-    colorful_image.save(path)
+def _enhance_color(path: str, factor: float = 1.5) -> None:
+    img = Image.open(path).convert("RGB")
+    ImageEnhance.Color(img).enhance(factor).save(path, format="PNG")
 
 
-def generate_image(prompt, panel_no=1, style="realistic", seed=None):
-    """Generate one storyboard panel image with a unique or provided seed."""
+def _is_turbo(pipe: StableDiffusionPipeline) -> bool:
+    rep = getattr(pipe, "_internal_dict", {})
+    name = rep.get("_name_or_path", "")
+    return "sd-turbo" in str(name).lower()
+
+
+def get_backend_info() -> str:
+    pipe = get_pipeline()
+    return getattr(pipe, "_internal_dict", {}).get("_name_or_path", "unknown")
+
+
+def generate_batch(
+    prompts: List[str],
+    seeds: List[int],
+    height: int = 384,
+    width: int = 384,
+    num_inference_steps: int = 10,
+    guidance_scale: float = 5.0,
+    color_boost: float = 1.5,
+    use_csa: bool = False,
+    csa_rate: float = 0.5,
+    use_lpa: bool = False,
+    lpa_strength: float = 0.5,
+) -> List[str]:
+    """Batch generation with optional CSA (token sharing) and LPA‑lite (shared low‑freq latents)."""
+    assert len(prompts) == len(seeds), "prompts and seeds must match in length"
+    n = len(prompts)
+
+    pipe = get_pipeline()
+    device = _get_device()
+    dtype = next(pipe.unet.parameters()).dtype
+
+    # Turbo prefers very low steps/guidance
+    if _is_turbo(pipe):
+        num_inference_steps = min(num_inference_steps, 6)
+        guidance_scale = 0.0
+
+    # Torch generators per sample
+    gens = [torch.Generator(device=device).manual_seed(int(s)) for s in seeds]
+
+    # LPA‑lite latents (shared low‑freq noise)
+    latents = None
+    if use_lpa:
+        latents = build_lpa_latents(batch=n, height=height, width=width, dtype=dtype,
+                                    device=device, generators=gens, alpha=float(lpa_strength))
+
+    # CSA attention patch
+    patched = False
+    if use_csa and n > 1:
+        try:
+            install_csa(pipe.unet, sample_rate=float(csa_rate))
+            patched = True
+        except Exception as e:
+            print(f"[CSA] Failed to install CSA, continuing without it: {e}")
+
     os.makedirs("outputs", exist_ok=True)
 
-    style_map = {
-        "realistic": "realistic photography, cinematic lighting, ultra-detailed, vibrant",
-        "anime": "anime style, detailed line art, vibrant tones, expressive lighting, digital anime art",
-        "comic": "comic book illustration, bold outlines, halftone shading, action style",
-        "cartoon": "cartoon style, playful, colorful, simple shapes, exaggerated expressions",
-        "art": "oil painting style, artistic brush strokes, textured canvas look",
-        "visual art": "concept art style, dramatic lighting, creative composition, painterly effect"
-    }
+    # Inference context
+    autocast_ctx = torch.autocast("cuda") if device.type == "cuda" else contextlib.nullcontext()
+    with torch.inference_mode(), autocast_ctx:
+        out_images = pipe(
+            prompts,
+            height=height,
+            width=width,
+            num_inference_steps=int(num_inference_steps),
+            guidance_scale=float(guidance_scale),
+            generator=gens,
+            latents=latents,
+        ).images
 
-    style_prompt = style_map.get(style.lower(), "realistic")
-    final_prompt = f"{prompt}, {style_prompt}, vibrant colors, digital art style"
+    if patched:
+        try:
+            uninstall_csa(pipe.unet)
+        except Exception:
+            pass
 
-    # Handle seeding for reproducibility or variation
-    if seed is None:
-        seed = panel_no * 42
-    generator = torch.Generator(device=pipe.device).manual_seed(seed)
+    paths: List[str] = []
+    for i, img in enumerate(out_images, start=1):
+        out_path = os.path.join("outputs", f"panel_{i}_seed{seeds[i-1]}_{height}x{width}.png")
+        img.save(out_path)
+        if color_boost and color_boost != 1.0:
+            _enhance_color(out_path, color_boost)
+        paths.append(out_path)
 
-    image = pipe(
-        final_prompt,
-        height=384,
-        width=384,
-        num_inference_steps=10,
-        guidance_scale=5,
-        generator=generator
-    ).images[0]
-
-    path = f"outputs/panel_{panel_no}.png"
-    image.save(path)
-    enhance_color(path)
-    print(f"✅ Saved unique {style} panel: {path} (seed={seed})")
-    return path
+    return paths
