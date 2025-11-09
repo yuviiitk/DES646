@@ -1,0 +1,60 @@
+{
+  "title": "Storyboard",
+  "style": "anime",
+  "panels": [
+    {
+      "id": 1,
+      "description": "A woman running behind a anime train, anime style, detailed line art, vibrant tones, expressive lighting, digital anime art, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 4686
+    },
+    {
+      "id": 2,
+      "description": "A man holding her hands to make sure that she catch the train, anime style, detailed line art, vibrant tones, expressive lighting, digital anime art, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 4687
+    },
+    {
+      "id": 3,
+      "description": "Hilly area, anime style, detailed line art, vibrant tones, expressive lighting, digital anime art, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 4688
+    },
+    {
+      "id": 4,
+      "description": "Sunny, anime style, detailed line art, vibrant tones, expressive lighting, digital anime art, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 4689
+    },
+    {
+      "id": 5,
+      "description": "Raining, anime style, detailed line art, vibrant tones, expressive lighting, digital anime art, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 4690
+    },
+    {
+      "id": 6,
+      "description": "Train, anime style, detailed line art, vibrant tones, expressive lighting, digital anime art, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 4691
+    }
+  ]
+}
