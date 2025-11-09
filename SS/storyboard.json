@@ -1,0 +1,60 @@
+{
+  "title": "Storyboard",
+  "style": "realistic",
+  "panels": [
+    {
+      "id": 1,
+      "description": "A person enters a studio, realistic photography, cinematic lighting, ultra-detailed, vibrant, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 8394
+    },
+    {
+      "id": 2,
+      "description": "Sees a smart lamp that adjusts light, realistic photography, cinematic lighting, ultra-detailed, vibrant, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 8395
+    },
+    {
+      "id": 3,
+      "description": "Smiles., realistic photography, cinematic lighting, ultra-detailed, vibrant, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 8396
+    },
+    {
+      "id": 4,
+      "description": "Smiles., realistic photography, cinematic lighting, ultra-detailed, vibrant, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 8397
+    },
+    {
+      "id": 5,
+      "description": "Smiles., realistic photography, cinematic lighting, ultra-detailed, vibrant, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 8398
+    },
+    {
+      "id": 6,
+      "description": "Smiles., realistic photography, cinematic lighting, ultra-detailed, vibrant, vibrant colors, digital art style",
+      "camera": null,
+      "mood": null,
+      "characters": [],
+      "caption": null,
+      "seed": 8399
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 import os
 import contextlib
 from functools import lru_cache
-from typing import List, Optional
+from typing import List
 
 import torch
 from PIL import Image, ImageEnhance
@@ -19,7 +19,7 @@ def _get_device():
 
 @lru_cache(maxsize=1)
 def get_pipeline() -> StableDiffusionPipeline:
-    """Load a diffusion pipeline once and cache it. Prefers SD‑Turbo, then SD‑1.5."""
+    """Load a diffusion pipeline once and cache it. Prefers SD-Turbo, then SD 1.5."""
     device = _get_device()
     dtype = torch.float16 if device.type == "cuda" else torch.float32
 
@@ -31,7 +31,7 @@ def get_pipeline() -> StableDiffusionPipeline:
     last_err = None
     for name in candidates:
         try:
-            print(f"⏳ Loading model: {name} on {device} ({dtype})")
+            print(f"[Init] Loading model: {name} on {device} ({dtype})")
             pipe = StableDiffusionPipeline.from_pretrained(name, torch_dtype=dtype, safety_checker=None)
             # Fast scheduler
             pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
@@ -42,7 +42,7 @@ def get_pipeline() -> StableDiffusionPipeline:
                 except Exception:
                     pipe.to(device)
                 try:
-                    pipe.unet = torch.compile(pipe.unet)  # PyTorch 2.x
+                    pipe.unet = torch.compile(pipe.unet)  # PyTorch 2.x optional compile
                 except Exception:
                     pass
                 pipe.enable_attention_slicing()
@@ -50,10 +50,10 @@ def get_pipeline() -> StableDiffusionPipeline:
             else:
                 pipe.to(device)
 
-            print("🎨 Model ready")
+            print("[Init] Model ready")
             return pipe
         except Exception as e:
-            print(f"⚠️ Failed to load {name}: {e}")
+            print(f"[Init] Failed to load {name}: {e}")
             last_err = e
     raise RuntimeError(f"Could not load any model. Last error: {last_err}")
 
@@ -87,7 +87,7 @@ def generate_batch(
     use_lpa: bool = False,
     lpa_strength: float = 0.5,
 ) -> List[str]:
-    """Batch generation with optional CSA (token sharing) and LPA‑lite (shared low‑freq latents)."""
+    """Batch generation with optional CSA (token sharing) and LPA-lite (shared low-frequency latents)."""
     assert len(prompts) == len(seeds), "prompts and seeds must match in length"
     n = len(prompts)
 
@@ -103,11 +103,18 @@ def generate_batch(
     # Torch generators per sample
     gens = [torch.Generator(device=device).manual_seed(int(s)) for s in seeds]
 
-    # LPA‑lite latents (shared low‑freq noise)
+    # LPA-lite latents (shared low-frequency noise)
     latents = None
     if use_lpa:
-        latents = build_lpa_latents(batch=n, height=height, width=width, dtype=dtype,
-                                    device=device, generators=gens, alpha=float(lpa_strength))
+        latents = build_lpa_latents(
+            batch=n,
+            height=height,
+            width=width,
+            dtype=dtype,
+            device=device,
+            generators=gens,
+            alpha=float(lpa_strength),
+        )
 
     # CSA attention patch
     patched = False
@@ -148,3 +155,4 @@ def generate_batch(
         paths.append(out_path)
 
     return paths
+
